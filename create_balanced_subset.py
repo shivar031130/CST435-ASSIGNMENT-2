@@ -5,7 +5,7 @@ import random
 # --- CONFIGURATION ---
 SOURCE_DATASET_ROOT = 'C:\\Users\\shivar\\OneDrive\\Desktop\\CST435 Assign2\\food-101\\food-101\\images' 
 DEST_DIR = 'dataset_subset'
-IMAGES_PER_CATEGORY = 10  # Target number of images to grab from EACH folder
+IMAGES_PER_CATEGORY = 50  # Target number of images to grab from EACH folder
 
 def create_balanced_subset():
     # 1. Validation
