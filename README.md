@@ -1,202 +1,170 @@
-Here is your **clean, properly formatted Markdown version** of the **CST 435 Assignment 2 Instructions**.
-You can **directly save this as `README.md`** or include it as an **Instructions section** in your repository.
+# CST 435 Assignment 2 — Parallel Image Processing Benchmark
 
----
+## Project Overview
 
-````markdown
-# CST 435 – Assignment 2 Instructions
-## Parallel Image Processing on Google Cloud Platform
+This project demonstrates **parallel image processing** using Python, applied to the **Food-101 dataset**, and benchmarked on **Google Cloud Platform (GCP)**. The goal is to evaluate and compare two parallel programming paradigms: **multiprocessing** and **concurrent.futures**, in terms of execution time, speedup, and efficiency.
 
----
+The project implements a full **image processing pipeline** consisting of five filters applied to individual images:
 
-## 💻 Phase 1: Prepare Files on Your Laptop
+1. Grayscale conversion
+2. Gaussian blur
+3. Sobel edge detection
+4. Image sharpening
+5. Brightness adjustment
 
-### 1. Create Project Folder
-Create a clean folder on your laptop and place the following files inside:
+All processing is CPU-bound, and output images are **not saved** to capture only real CPU parallelism.
 
-- `create_balanced_subset.py`  
-  *(Creates a balanced subset of images from the Food-101 dataset)*
+### **1. Dataset Preparation**
 
-- `main_benchmark.py`  
-  *(Applies 5 image filters and runs Python `multiprocessing` and `concurrent.futures` paradigms)*
+* The `create_balanced_subset.py` script:
 
-### 2. Configure Dataset Path
-Edit the following line in `create_balanced_subset.py` to match your local Food-101 dataset location:
+  * Traverses all category folders in Food-101
+  * Randomly selects **50 images per category**
+  * Copies images into a single flat directory
+  * Renames files to avoid conflicts
+* Produces a **balanced subset** of ~5050 images.
+
+**Sample code snippet:**
 
 ```python
-SOURCE_DATASET_ROOT = "path/to/food-101/images"
-````
+selected_images = random.sample(images, min(len(images), IMAGES_PER_CATEGORY))
+for i, image_file in enumerate(selected_images):
+    new_filename = f"{category}_{i+1:03d}.jpg"
+    shutil.copy2(src_path, os.path.join(DEST_DIR, new_filename))
+```
 
-### 3. Generate Dataset Subset
+---
 
-Run the script:
+### **2. Benchmark Controller**
+
+* `main_benchmark.py` executes the parallel image processing pipeline
+* Worker function applies **all five filters** per image
+* Two parallel paradigms:
+
+  * **Multiprocessing** (`multiprocessing.Pool`)
+  * **Concurrent.Futures** (`ProcessPoolExecutor`)
+* Supports multiple core counts: **1, 2, 4, 8**
+* Includes a **warm-up run** to preload libraries and OS caches
+* Stores results in `performance_results.csv`
+
+**Sample worker function:**
+
+```python
+def process_single_image(file_path):
+    img = cv2.imread(file_path)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    blur = cv2.GaussianBlur(gray, (3, 3), 0)
+    sobel_x = cv2.Sobel(blur, cv2.CV_64F, 1, 0, ksize=3)
+    sobel_y = cv2.Sobel(blur, cv2.CV_64F, 0, 1, ksize=3)
+    sharpened = cv2.filter2D(blur, -1, np.array([[0,-1,0],[-1,5,-1],[0,-1,0]]))
+    final_result = cv2.add(sharpened, np.ones(sharpened.shape, dtype="uint8") * 30)
+    return 1
+```
+
+---
+
+## **Experimental Setup**
+
+### **Hardware**
+
+* GCP VM: e2-highcpu-8 (8 vCPUs, 8 GB RAM)
+* Disk: 10 GB Standard Persistent Disk
+* OS: Ubuntu 20.04 LTS
+* Local machine: Laptop with access to Food-101 dataset
+
+### **Software**
+
+* Python 3.11 (virtual environment)
+* Libraries: OpenCV (headless), NumPy, multiprocessing, concurrent.futures, gdown
+* CSV handling: Python built-in module
+
+### **Configuration**
+
+* Input dataset folder: `dataset_subset` (5050 images)
+* Parallel core counts: 1, 2, 4, 8
+* Warm-up run: 100 images on 1 core
+* Output disabled to reduce I/O interference
+* Benchmark metrics: execution time, speedup, efficiency
+
+---
+
+## **Run Instructions**
+
+### **Phase 1: Prepare Files Locally**
+
+1. Create a clean folder and add:
+
+   * `create_balanced_subset.py`
+   * `main_benchmark.py`
+2. Edit the `SOURCE_DATASET_ROOT` in `create_balanced_subset.py` to point to your Food-101 dataset.
+3. Run the subset creation script:
 
 ```bash
 python create_balanced_subset.py
 ```
 
-A folder named `dataset_subset/` will be created.
-
-### 4. Upload to Google Drive
-
-* Zip the project folder
-* Upload it to Google Drive
-* Change sharing from **Restricted** to **Anyone with the link**
-* Click **Copy Link**
-
-### 5. Extract Google Drive File ID
-
-Paste the copied link into a text editor. Example:
-
-```
-https://drive.google.com/file/d/1A2b3C4d5-Example-ID-Here/view?usp=sharing
-```
-
-Copy only the **File ID** (between `/d/` and `/view`).
+4. Verify the `dataset_subset` folder is created with ~5050 images.
+5. Zip the folder and upload it to **Google Drive**.
+6. Copy the **file ID** from the public link.
 
 ---
 
-## ☁️ Phase 2: Create & Connect to GCP VM
+### **Phase 2: Setup GCP VM**
 
-### 1. Create Virtual Machine
+1. Create a VM instance:
 
-Navigate to:
-
-```
-GCP Console → Compute Engine → VM Instances
-```
-
-Create a new instance with the following configuration:
-
-* **Name:** `image-processing-node`
-* **Machine Type:** `e2-highcpu-8` (8 vCPUs, 8 GB RAM)
-* **Boot Disk:** Ubuntu 20.04 LTS
-* **Storage:** 10 GB Standard Persistent Disk
-
-Click **Create**.
-
-### 2. Connect via SSH
-
-Once the VM is running, click **SSH** to open the terminal.
-
-### 3. Upload Files
-
-Upload `main_benchmark.py` to the VM using SSH or SCP.
+   * Name: `image-processing-node`
+   * Machine type: e2-highcpu-8
+   * OS: Ubuntu 20.04 LTS
+   * Boot disk: 10 GB Standard Persistent Disk
+2. Connect via SSH in GCP Console.
+3. Upload `main_benchmark.py` to the VM using SSH/SCP.
 
 ---
 
-## ⚙️ Phase 3: Server Setup
-
-### Step A: Update and Install System Tools
+### **Phase 3: Configure VM Environment**
 
 ```bash
 sudo apt update
 sudo apt install python3-pip python3-venv unzip htop -y
-```
-
-### Step B: Install Google Drive Downloader
-
-```bash
-pip3 install gdown
-```
-
----
-
-## 📥 Phase 4: Download Files from Google Drive
-
-### Step A: Download the Zip File
-
-Replace `YOUR_FILE_ID` with your actual file ID:
-
-```bash
-gdown YOUR_FILE_ID
-```
-
-### Step B: Unzip Dataset
-
-```bash
-unzip dataset_subset.zip
-```
-
-### Step C: Verify Files
-
-```bash
-ls -F
-```
-
-Expected output:
-
-```
-dataset_subset/
-main_benchmark.py
-```
-
----
-
-## 🐍 Phase 5: Python Setup (Manual Installation)
-
-### Step A: Create Virtual Environment
-
-```bash
 python3 -m venv venv
-```
-
-### Step B: Activate Virtual Environment
-
-```bash
 source venv/bin/activate
-```
-
-### Step C: Install Required Libraries
-
-```bash
-pip install numpy opencv-python-headless
+pip install numpy opencv-python-headless gdown
 ```
 
 ---
 
-## 🚀 Phase 6: Run the Program
+### **Phase 4: Download Dataset from Drive**
 
-### 1. Execute the Benchmark
+```bash
+gdown <FILE_ID>
+unzip dataset_subset.zip
+ls -F  # Verify dataset_subset/ and main_benchmark.py are present
+```
+
+---
+
+### **Phase 5: Run Benchmark**
 
 ```bash
 python main_benchmark.py
 ```
 
-### 2. Monitor CPU Utilization
-
-Open a second terminal window and run:
+* CPU utilization can be monitored in a second terminal using:
 
 ```bash
 htop
 ```
 
-### 3. Observe Bottlenecks
-
-* **Green CPU bars:** CPU is actively processing (Good)
-* **Low or empty bars:** CPU is idle (Bad)
-* **Bottleneck moment:**
-  If the program is still running but CPU usage suddenly drops to 0–10%, the system is waiting on I/O operations.
+* Observe execution time, speedup, and efficiency for different cores.
+* Results will be saved in `performance_results.csv`.
 
 ---
 
-## 📊 Summary of Phase 6 Output
+## **Key Notes**
 
-* Terminal displays **Execution Time, Speedup, and Efficiency**
-* A CSV file named `performance_results.csv` is generated
+* Warm-up run ensures consistent benchmarking results.
+* Output is disabled to reduce I/O bottlenecks.
+* Core counts allow testing both low and high parallel workloads.
+* The design ensures a fair comparison between **multiprocessing** and **concurrent.futures**.
 
----
-
-## ✅ End of Instructions
-
-```
-
----
-
-If you want, I can:
-- Add **screenshots placeholders**
-- Convert this into a **PDF submission version**
-- Align wording exactly to **CST435 rubric**
-
-Just let me know 👍
-```
